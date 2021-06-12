@@ -19,7 +19,7 @@ pool_list:
     authentication_public_key_timestamp: 1621854388
     owner_public_key: 84c3fcf9d5581c1ddc702cb0f3b4a06043303b334dd993ab42b2c320ebfa98e5ce558448615b3f69638ba92cf7f43da5
     target_signature: 95ae82302134489d68cf0890356fc2d360c3bda9c9f15a3111a6a776df073a2fc6194896f3196a10fba18bb9de8e4fae0caf08e49fe32786d35fe0538daf0ceb6f7ace9477440b9978589bcaa28690dded6e5a296b47bffe2db97c1c28c9d13c
-    pool_payout_instructions: c2b08e41d766da4116e388357ed957d04ad754623a915f3fd65188a8746cf3e8
+    payout_instructions: c2b08e41d766da4116e388357ed957d04ad754623a915f3fd65188a8746cf3e8
     pool_url: localhost
     singleton_genesis: ae4ef3b9bfe68949691281a015a9c16630fc8f66d48c19ca548fb80768791afa
     target_puzzle_hash: 344587cf06a39db471d2cc027504e8688a0a67cce961253500c956c73603fd58
@@ -30,7 +30,7 @@ pool_list:
 @streamable
 class PoolWalletConfig(Streamable):
     pool_url: str
-    pool_payout_instructions: str
+    payout_instructions: str
     target_puzzle_hash: bytes32
     launcher_id: bytes32
     p2_singleton_puzzle_hash: bytes32
@@ -47,7 +47,7 @@ def load_pool_config(root_path: Path) -> List[PoolWalletConfig]:
         for pool_config_dict in config["pool"]["pool_list"]:
             pool_config = PoolWalletConfig(
                 pool_config_dict["pool_url"],
-                pool_config_dict["pool_payout_instructions"],
+                pool_config_dict["payout_instructions"],
                 hexstr_to_bytes(pool_config_dict["target_puzzle_hash"]),
                 hexstr_to_bytes(pool_config_dict["launcher_id"]),
                 hexstr_to_bytes(pool_config_dict["p2_singleton_puzzle_hash"]),
