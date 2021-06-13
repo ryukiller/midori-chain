@@ -116,7 +116,7 @@ class Farmer:
     async def _start(self):
         self.cache_clear_task = asyncio.create_task(self._periodically_clear_cache_task())
         self.update_pool_state_task = asyncio.create_task(self._periodically_update_pool_state_task())
-        await self._update_pool_state()
+        await self.update_pool_state()
 
     def _close(self):
         self._shut_down = True
@@ -149,7 +149,7 @@ class Farmer:
         self.log.info(f"peer disconnected {connection.get_peer_info()}")
         self.state_changed("close_connection", {})
 
-    async def _update_pool_state(self):
+    async def update_pool_state(self):
         pool_config_list: List[PoolWalletConfig] = load_pool_config(self._root_path)
         for pool_config in pool_config_list:
             p2_singleton_puzzle_hash = pool_config.p2_singleton_puzzle_hash
@@ -245,7 +245,7 @@ class Farmer:
 
                 config["pool"]["pool_list"] = new_list
                 save_config(self._root_path, "config.yaml", config)
-                await self._update_pool_state()
+                await self.update_pool_state()
                 return
 
         self.log.warning(f"Launcher id: {launcher_id} not found")
@@ -273,7 +273,7 @@ class Farmer:
         time_slept: uint64 = uint64(0)
         while not self._shut_down:
             if time_slept > 60:
-                await self._update_pool_state()
+                await self.update_pool_state()
                 time_slept = uint64(0)
             time_slept += 1
             await asyncio.sleep(1)
@@ -299,6 +299,6 @@ class Farmer:
                     f"{len(self.quality_str_to_identifiers)} {len(self.number_of_responses)}"
                 )
                 log.debug("Updating pool state")
-                await self._update_pool_state()
+                await self.update_pool_state()
             time_slept += 1
             await asyncio.sleep(1)
