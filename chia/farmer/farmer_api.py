@@ -147,9 +147,6 @@ class FarmerAPI:
                     new_proof_of_space.proof,
                     new_proof_of_space.sp_hash,
                     is_eos,
-                    pool_state_dict["current_difficulty"],
-                    pool_state_dict["pool_config"].owner_public_key,
-                    pool_state_dict["pool_config"].payout_instructions,
                 )
 
                 # The plot key is 2/2 so we need the harvester's half of the signature
@@ -210,21 +207,15 @@ class FarmerAPI:
                                     )
                                     pool_state_dict["pool_errors_24h"].append(pool_response)
                                     if pool_response["error_code"] == PoolErrorCode.PROOF_NOT_GOOD_ENOUGH.value:
-                                        self.farmer.log.error("Too low difficulty, adjusting")
-                                        pool_state_dict["current_difficulty"] = pool_response["current_difficulty"]
-                                    else:
-                                        self.farmer.log.error(f"error not 5. {pool_response['error_code'] == '5'}")
-
+                                        self.farmer.log.error("Partial not good enough, forcing pool farmer update to "
+                                                              "get our current difficulty.")
+                                        pool_state_dict["next_farmer_update"] = 0
+                                        await self.farmer.update_pool_state()
                                 else:
-                                    pool_state_dict["points_acknowledged_since_start"] += pool_state_dict[
-                                        "current_difficulty"
-                                    ]
-                                    pool_state_dict["points_acknowledged_24h"].append(
-                                        (time.time(), pool_state_dict["current_difficulty"])
-                                    )
-                                    pool_state_dict["current_difficulty"] = pool_response["current_difficulty"]
-                                    pool_state_dict["current_points"] = pool_response["points"]
-
+                                    new_difficulty = pool_response["current_difficulty"]
+                                    pool_state_dict["points_acknowledged_since_start"] += new_difficulty
+                                    pool_state_dict["points_acknowledged_24h"].append((time.time(), new_difficulty))
+                                    pool_state_dict["current_difficulty"] = new_difficulty
                             else:
                                 self.farmer.log.error(f"Error sending partial to {pool_url}, {resp.status}")
                 except Exception as e:
