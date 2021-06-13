@@ -34,6 +34,7 @@ singleton_mod_hash = SINGLETON_MOD.get_tree_hash()
 
 log = logging.getLogger(__name__)
 
+UPDATE_POOL_INFO_INTERVAL: int = 3600
 
 """
 HARVESTER PROTOCOL (FARMER <-> HARVESTER)
@@ -149,6 +150,17 @@ class Farmer:
         self.log.info(f"peer disconnected {connection.get_peer_info()}")
         self.state_changed("close_connection", {})
 
+    def _pool_get_pool_info(self, pool_config: PoolWalletConfig) -> Optional[Dict]:
+        async with aiohttp.ClientSession(trust_env=True) as session:
+            async with session.get(f"{pool_config.pool_url}/pool_info") as resp:
+                if resp.ok:
+                    response: Dict = json.loads(await resp.text())
+                    self.log.info(f"GET /pool_info response: {response}")
+                    return response
+                else:
+                    self.log.error(f"Error in GET /pool_info {pool_config.pool_url}, {resp.status}")
+        return None
+
     async def update_pool_state(self):
         pool_config_list: List[PoolWalletConfig] = load_pool_config(self._root_path)
         for pool_config in pool_config_list:
@@ -169,24 +181,25 @@ class Farmer:
                         "points_found_24h": [],
                         "points_acknowledged_since_start": 0,
                         "points_acknowledged_24h": [],
+                        "next_pool_info_update": 0,
                         "current_points": 0,
-                        "current_difficulty": 10,
+                        "current_difficulty": None,
                         "pool_errors_24h": [],
-                        "pool_info": None,
                     }
                     self.log.info(f"Added pool: {pool_config}")
                 pool_state = self.pool_state[p2_singleton_puzzle_hash]
                 pool_state["pool_config"] = pool_config
 
-                if pool_state["pool_info"] is None:
+                # TODO: Improve error handling below, inform about unexpected failures
+                if time.time() >= pool_state["next_pool_info_update"]:
                     # Makes a GET request to the pool to get the updated information
-                    async with aiohttp.ClientSession(trust_env=True) as session:
-                        async with session.get(f"{pool_config.pool_url}/pool_info") as resp:
-                            if resp.ok:
-                                pool_state["pool_info"] = json.loads(await resp.text())
-                                pool_state["current_difficulty"] = pool_state["pool_info"]["minimum_difficulty"]
-                            else:
-                                self.log.error(f"Error fetching pool info from {pool_config.pool_url}, {resp.status}")
+                    pool_info = self._pool_get_pool_info(p2_singleton_puzzle_hash)
+                    if pool_info is not None and "error_code" not in pool_info:
+                        pool_state["next_pool_info_update"] = time.time() + UPDATE_POOL_INFO_INTERVAL
+                        # Only update the first time from GET /pool_info, gets updated from GET /farmer later
+                        if pool_state["current_difficulty"] is None:
+                            pool_state["current_difficulty"] = pool_info["minimum_difficulty"]
+
             except Exception as e:
                 self.log.error(f"Exception fetching pool info from {pool_config.pool_url}, {e}")
 
