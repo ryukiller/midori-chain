@@ -203,7 +203,7 @@ class Farmer:
                             pool_state["current_difficulty"] = pool_info["minimum_difficulty"]
 
             except Exception as e:
-                self.log.error(f"Exception fetching pool info from {pool_config.pool_url}, {e}")
+                self.log.error(f"Exception in _update_pool_state for {pool_config.pool_url}, {e}")
 
     def get_public_keys(self):
         return [child_sk.get_g1() for child_sk in self._private_keys]
