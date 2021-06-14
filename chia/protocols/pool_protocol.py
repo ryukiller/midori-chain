@@ -39,6 +39,7 @@ class GetPoolInfoResponse(Streamable):
     target_puzzle_hash: bytes32
     authentication_token_timeout: uint8
 
+
 # POST /partial
 
 

@@ -17,8 +17,10 @@ from chia.protocols.pool_protocol import (
     get_current_authentication_token,
     GetFarmerResponse,
     PoolErrorCode,
-    PostFarmerPayload, PostFarmerRequest,
-    PutFarmerPayload, PutFarmerRequest,
+    PostFarmerPayload,
+    PostFarmerRequest,
+    PutFarmerPayload,
+    PutFarmerRequest,
 )
 from chia.protocols.protocol_message_types import ProtocolMessageTypes
 from chia.server.outbound_message import NodeType, make_msg
@@ -159,7 +161,7 @@ class Farmer:
         self.log.info(f"peer disconnected {connection.get_peer_info()}")
         self.state_changed("close_connection", {})
 
-    def _pool_get_pool_info(self, pool_config: PoolWalletConfig) -> Optional[Dict]:
+    async def _pool_get_pool_info(self, pool_config: PoolWalletConfig) -> Optional[Dict]:
         async with aiohttp.ClientSession(trust_env=True) as session:
             async with session.get(f"{pool_config.pool_url}/pool_info") as resp:
                 if resp.ok:
@@ -170,16 +172,18 @@ class Farmer:
                     self.log.error(f"Error in GET /pool_info {pool_config.pool_url}, {resp.status}")
         return None
 
-    def _pool_get_farmer(self, pool_config: PoolWalletConfig, authentication_token_timeout: uint8,
-                         authentication_sk: PrivateKey) -> Optional[Dict]:
+    async def _pool_get_farmer(
+        self, pool_config: PoolWalletConfig, authentication_token_timeout: uint8, authentication_sk: PrivateKey
+    ) -> Optional[Dict]:
         assert authentication_sk.get_g1() == pool_config.authentication_public_key
         authentication_token = get_current_authentication_token(authentication_token_timeout)
-        signature: G2Element = AugSchemeMPL.sign(authentication_sk,
-                                                 pool_config.launcher_id + bytes(authentication_token))
+        signature: G2Element = AugSchemeMPL.sign(
+            authentication_sk, pool_config.launcher_id + bytes(authentication_token)
+        )
         get_farmer_params = {
             "launcher_id": pool_config.launcher_id.hex(),
             "authentication_token": authentication_token,
-            "signature": bytes(signature).hex()
+            "signature": bytes(signature).hex(),
         }
         async with aiohttp.ClientSession(trust_env=True) as session:
             async with session.get(f"{pool_config.pool_url}/farmer", params=get_farmer_params) as resp:
@@ -191,14 +195,15 @@ class Farmer:
                     self.log.error(f"Error in GET /farmer {pool_config.pool_url}, {resp.status}")
         return None
 
-    def _pool_post_farmer(self, pool_config: PoolWalletConfig, authentication_token_timeout: uint8,
-                          owner_sk: PrivateKey) -> Optional[Dict]:
+    async def _pool_post_farmer(
+        self, pool_config: PoolWalletConfig, authentication_token_timeout: uint8, owner_sk: PrivateKey
+    ) -> Optional[Dict]:
         post_farmer_payload: PostFarmerPayload = PostFarmerPayload(
             pool_config.launcher_id,
             get_current_authentication_token(authentication_token_timeout),
             pool_config.authentication_public_key,
             pool_config.payout_instructions,
-            pool_config.suggested_difficulty,
+            None,
         )
         assert owner_sk.get_g1() == pool_config.owner_public_key
         signature: G2Element = AugSchemeMPL.sign(owner_sk, post_farmer_payload.get_hash())
@@ -213,15 +218,17 @@ class Farmer:
                     return response
                 else:
                     self.log.error(f"Error in POST /farmer {pool_config.pool_url}, {resp.status}")
+                    return None
 
-    def _pool_put_farmer(self, pool_config: PoolWalletConfig, authentication_token_timeout: uint8,
-                         owner_sk: PrivateKey) -> Optional[Dict]:
+    async def _pool_put_farmer(
+        self, pool_config: PoolWalletConfig, authentication_token_timeout: uint8, owner_sk: PrivateKey
+    ) -> Optional[Dict]:
         put_farmer_payload: PutFarmerPayload = PutFarmerPayload(
             pool_config.launcher_id,
             get_current_authentication_token(authentication_token_timeout),
             pool_config.authentication_public_key,
             pool_config.payout_instructions,
-            pool_config.suggested_difficulty,
+            None,
         )
         assert owner_sk.get_g1() == pool_config.owner_public_key
         signature: G2Element = AugSchemeMPL.sign(owner_sk, put_farmer_payload.get_hash())
@@ -236,6 +243,7 @@ class Farmer:
                     return response
                 else:
                     self.log.error(f"Error in PUT /farmer {pool_config.pool_url}, {resp.status}")
+                    return None
 
     async def update_pool_state(self):
         pool_config_list: List[PoolWalletConfig] = load_pool_config(self._root_path)
@@ -271,7 +279,7 @@ class Farmer:
                 # TODO: Improve error handling below, inform about unexpected failures
                 if time.time() >= pool_state["next_pool_info_update"]:
                     # Makes a GET request to the pool to get the updated information
-                    pool_info = self._pool_get_pool_info(p2_singleton_puzzle_hash)
+                    pool_info = await self._pool_get_pool_info(p2_singleton_puzzle_hash)
                     if pool_info is not None and "error_code" not in pool_info:
                         pool_state["authentication_token_timeout"] = pool_info["authentication_token_timeout"]
                         pool_state["next_pool_info_update"] = time.time() + UPDATE_POOL_INFO_INTERVAL
@@ -282,36 +290,45 @@ class Farmer:
                 if time.time() >= pool_state["next_farmer_update"]:
                     authentication_token_timeout = pool_state["authentication_token_timeout"]
 
-                    def update_pool_farmer_info() -> Optional[dict]:
+                    async def update_pool_farmer_info() -> Optional[dict]:
                         # Run a GET /farmer to see if the farmer is already known by the pool
-                        response = self._pool_get_farmer(pool_config, authentication_token_timeout, authentication_sk)
+                        response = await self._pool_get_farmer(
+                            pool_config, authentication_token_timeout, authentication_sk
+                        )
                         if response is not None and "error_code" not in response:
                             farmer_info: GetFarmerResponse = GetFarmerResponse.from_json_dict(response)
                             pool_state["current_difficulty"] = farmer_info.current_difficulty
-                            pool_state["current_points"] = farmer_info.points
+                            pool_state["current_points"] = farmer_info.current_points
                             pool_state["next_farmer_update"] = time.time() + UPDATE_POOL_FARMER_INFO_INTERVAL
                         return response
 
                     if authentication_token_timeout is not None:
-                        update_response = update_pool_farmer_info()
+                        update_response = await update_pool_farmer_info()
                         is_error = update_response is not None and "error_code" in update_response
                         if is_error and update_response["error_code"] == PoolErrorCode.FARMER_NOT_KNOWN:
                             # Make the farmer known on the pool with a POST /farmer
                             owner_sk = await find_owner_sk(all_sks, pool_config.owner_public_key)
-                            post_response = self._pool_post_farmer(pool_config, authentication_token_timeout, owner_sk)
+                            post_response = await self._pool_post_farmer(
+                                pool_config, authentication_token_timeout, owner_sk
+                            )
                             if post_response is not None and "error_code" not in post_response:
-                                self.log.info(f"Welcome message from {pool_config.pool_url}: "
-                                              f"{post_response['welcome_message']}")
+                                self.log.info(
+                                    f"Welcome message from {pool_config.pool_url}: "
+                                    f"{post_response['welcome_message']}"
+                                )
                                 # Now we should be able to update the local farmer info
-                                update_response = update_pool_farmer_info()
+                                update_response = await update_pool_farmer_info()
                                 if update_response is not None and "error_code" in update_response:
-                                    self.log.error(f"Failed to update farmer info after POST /farmer: "
-                                                   f"{update_response['error_code']}, "
-                                                   f"{update_response['error_message']}")
+                                    self.log.error(
+                                        f"Failed to update farmer info after POST /farmer: "
+                                        f"{update_response['error_code']}, "
+                                        f"{update_response['error_message']}"
+                                    )
                     else:
                         self.farmer.log.error(
                             f"No pool specific authentication_token_timeout has been set for {p2_singleton_puzzle_hash}"
-                            f", check communication with the pool.")
+                            f", check communication with the pool."
+                        )
 
             except Exception as e:
                 self.log.error(f"Exception in _update_pool_state for {pool_config.pool_url}, {e}")
