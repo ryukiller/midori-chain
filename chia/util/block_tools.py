@@ -21,10 +21,10 @@ from chia.full_node.bundle_tools import (
     simple_solution_generator,
 )
 from chia.util.errors import Err
-from chia.full_node.generator import create_generator_args, setup_generator_args
+from chia.full_node.generator import setup_generator_args
 from chia.full_node.mempool_check_condition import GENERATOR_MOD
 from chia.plotting.create_plots import create_plots
-from chia.consensus.block_creation import create_unfinished_block, unfinished_block_to_full_block
+from chia.consensus.block_creation import unfinished_block_to_full_block
 from chia.consensus.block_record import BlockRecord
 from chia.consensus.block_rewards import calculate_base_farmer_reward, calculate_pool_reward
 from chia.consensus.blockchain_interface import BlockchainInterface
@@ -50,7 +50,7 @@ from chia.types.blockchain_format.coin import Coin, hash_coin_list
 from chia.types.blockchain_format.foliage import Foliage, FoliageBlockData, FoliageTransactionBlock, TransactionsInfo
 from chia.types.blockchain_format.pool_target import PoolTarget
 from chia.types.blockchain_format.proof_of_space import ProofOfSpace
-from chia.types.blockchain_format.reward_chain_block import RewardChainBlock, RewardChainBlockUnfinished
+from chia.types.blockchain_format.reward_chain_block import RewardChainBlockUnfinished
 from chia.types.blockchain_format.sized_bytes import bytes32
 from chia.types.blockchain_format.slots import (
     ChallengeChainSubSlot,
@@ -1387,9 +1387,7 @@ def get_full_block_and_block_record(
     return full_block, block_record
 
 
-def get_name_puzzle_conditions_test(
-    generator: BlockGenerator, max_cost: int
-) -> NPCResult:
+def get_name_puzzle_conditions_test(generator: BlockGenerator, max_cost: int) -> NPCResult:
     """
     This is similar to get_name_puzzle_conditions(), but it doesn't validate
     the conditions. We rely on this in tests to create invalid blocks.
@@ -1524,9 +1522,7 @@ def create_test_foliage(
         # Calculate the cost of transactions
         if block_generator is not None:
             generator_block_heights_list = block_generator.block_height_list()
-            result: NPCResult = get_name_puzzle_conditions_test(
-                block_generator, constants.MAX_BLOCK_COST_CLVM
-            )
+            result: NPCResult = get_name_puzzle_conditions_test(block_generator, constants.MAX_BLOCK_COST_CLVM)
             cost = calculate_cost_of_program(block_generator.program, result, constants.COST_PER_BYTE)
 
             removal_amount = 0
@@ -1671,8 +1667,6 @@ def create_test_foliage(
     )
 
     return foliage, foliage_transaction_block, transactions_info
-
-
 
 
 def create_test_unfinished_block(
