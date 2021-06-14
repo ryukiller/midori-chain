@@ -4,6 +4,7 @@ from time import time
 from typing import Dict, List
 
 import pytest
+from clvm import SExp
 
 from chia.full_node.mempool import Mempool
 from chia.protocols import full_node_protocol
@@ -16,8 +17,9 @@ from chia.types.condition_with_args import ConditionWithArgs
 from chia.types.spend_bundle import SpendBundle
 from chia.util.clvm import int_to_bytes
 from chia.util.condition_tools import conditions_for_solution
-from chia.util.errors import Err
+from chia.util.errors import Err, ValidationError
 from chia.util.ints import uint64
+from chia.full_node.mempool_check_conditions import parse_condition_args
 
 from tests.connection_utils import connect_and_get_peer
 from tests.core.node_height import node_height_at_least
@@ -1361,3 +1363,19 @@ class TestMempoolManager:
         sb1 = full_node_1.full_node.mempool_manager.get_spendbundle(spend_bundle1.name())
 
         assert sb1 is None
+
+    def test_parse_condition_my_coin_id(self):
+
+        valid_coin_id = b"a" * 32
+        short_coin_id = b"a" * 31
+        long_coin_id = b"a" * 33
+
+        cost, args = parse_condition_args(SExp.to([valid_coin_id]), ConditionOpcode.ASSERT_MY_COIN_ID)
+        assert cost == 0
+        assert args == [valid_coin_id]
+
+        with pytest.raises(ValidationError):
+            cost, args = parse_condition_args(SExp.to([short_coin_id]), ConditionOpcode.ASSERT_MY_COIN_ID)
+
+        with pytest.raises(ValidationError):
+            cost, args = parse_condition_args(SExp.to([long_coin_id]), ConditionOpcode.ASSERT_MY_COIN_ID)
