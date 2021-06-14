@@ -443,6 +443,7 @@ class PoolWallet:
 
         unspent_records = await wallet_state_manager.coin_store.get_unspent_coins_for_wallet(standard_wallet.wallet_id)
         balance = await standard_wallet.get_confirmed_balance(unspent_records)
+        self.log.error
         if balance < PoolWallet.MINIMUM_INITIAL_BALANCE:
             raise ValueError("Not enough balance in main wallet to create a managed plotting pool.")
         if balance < fee:

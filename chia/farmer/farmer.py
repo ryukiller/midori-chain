@@ -4,6 +4,7 @@ import logging
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
+import traceback
 
 import aiohttp
 from blspy import AugSchemeMPL, G1Element, G2Element, PrivateKey
@@ -206,7 +207,7 @@ class Farmer:
             None,
         )
         assert owner_sk.get_g1() == pool_config.owner_public_key
-        signature: G2Element = AugSchemeMPL.sign(owner_sk, post_farmer_payload.get_hash())
+        signature: G2Element = AugSchemeMPL.sign(owner_sk, bytes(post_farmer_payload))
         post_farmer_request = PostFarmerRequest(post_farmer_payload, signature)
         post_farmer_body = json.dumps(post_farmer_request.to_json_dict())
 
@@ -231,7 +232,7 @@ class Farmer:
             None,
         )
         assert owner_sk.get_g1() == pool_config.owner_public_key
-        signature: G2Element = AugSchemeMPL.sign(owner_sk, put_farmer_payload.get_hash())
+        signature: G2Element = AugSchemeMPL.sign(owner_sk, bytes(put_farmer_payload))
         put_farmer_request = PutFarmerRequest(put_farmer_payload, signature)
         put_farmer_body = json.dumps(put_farmer_request.to_json_dict())
 
@@ -279,7 +280,7 @@ class Farmer:
                 # TODO: Improve error handling below, inform about unexpected failures
                 if time.time() >= pool_state["next_pool_info_update"]:
                     # Makes a GET request to the pool to get the updated information
-                    pool_info = await self._pool_get_pool_info(p2_singleton_puzzle_hash)
+                    pool_info = await self._pool_get_pool_info(pool_config)
                     if pool_info is not None and "error_code" not in pool_info:
                         pool_state["authentication_token_timeout"] = pool_info["authentication_token_timeout"]
                         pool_state["next_pool_info_update"] = time.time() + UPDATE_POOL_INFO_INTERVAL
@@ -305,7 +306,7 @@ class Farmer:
                     if authentication_token_timeout is not None:
                         update_response = await update_pool_farmer_info()
                         is_error = update_response is not None and "error_code" in update_response
-                        if is_error and update_response["error_code"] == PoolErrorCode.FARMER_NOT_KNOWN:
+                        if is_error and update_response["error_code"] == PoolErrorCode.FARMER_NOT_KNOWN.value:
                             # Make the farmer known on the pool with a POST /farmer
                             owner_sk = await find_owner_sk(all_sks, pool_config.owner_public_key)
                             post_response = await self._pool_post_farmer(
@@ -331,7 +332,8 @@ class Farmer:
                         )
 
             except Exception as e:
-                self.log.error(f"Exception in _update_pool_state for {pool_config.pool_url}, {e}")
+                tb = traceback.format_exc()
+                self.log.error(f"Exception in _update_pool_state for {pool_config.pool_url}, {e} {tb}")
 
     def get_public_keys(self):
         return [child_sk.get_g1() for child_sk in self._private_keys]
