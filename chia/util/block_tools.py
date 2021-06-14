@@ -22,7 +22,7 @@ from chia.full_node.bundle_tools import (
 )
 from chia.util.errors import Err
 from chia.full_node.generator import setup_generator_args
-from chia.full_node.mempool_check_condition import GENERATOR_MOD
+from chia.full_node.mempool_check_conditions import GENERATOR_MOD
 from chia.plotting.create_plots import create_plots
 from chia.consensus.block_creation import unfinished_block_to_full_block
 from chia.consensus.block_record import BlockRecord
