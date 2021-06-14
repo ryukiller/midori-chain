@@ -297,50 +297,6 @@ def parse_condition(cond: SExp, safe_mode: bool) -> Tuple[int, Optional[Conditio
     return cost, cvl
 
 
-def get_name_puzzle_conditions_no_validation(
-    generator: BlockGenerator, max_cost: int
-) -> NPCResult:
-    """
-    This is similar to get_name_puzzle_conditions(), but it doesn't validate
-    the conditions. We rely on this in tests to create invalid blocks.
-    safe_mode is implicitly True in this call
-    """
-    try:
-        block_program, block_program_args = setup_generator_args(generator)
-        clvm_cost, result = GENERATOR_MOD.run_safe_with_cost(max_cost, block_program, block_program_args)
-
-        npc_list: List[NPC] = []
-
-        for res in result.first().as_iter():
-            conditions_list: List[ConditionWithArgs] = []
-
-            spent_coin_parent_id: bytes32 = res.first().as_atom()
-            res = res.rest()
-            spent_coin_puzzle_hash: bytes32 = res.first().as_atom()
-            res = res.rest()
-            spent_coin_amount: uint64 = uint64(res.first().as_int())
-            res = res.rest()
-            spent_coin: Coin = Coin(spent_coin_parent_id, spent_coin_puzzle_hash, spent_coin_amount)
-
-            for cond in res.first().as_iter():
-                condition = cond.first().as_atom()
-                if condition not in opcodes:
-                    return NPCResult(uint16(Err.INVALID_CONDITION.value), [], uint64(0))
-
-                cvl = ConditionWithArgs(ConditionOpcode(condition), cond.rest().as_atom_list())
-                conditions_list.append(cvl)
-
-            conditions_dict = conditions_by_opcode(conditions_list)
-            if conditions_dict is None:
-                conditions_dict = {}
-            npc_list.append(
-                NPC(spent_coin.name(), spent_coin.puzzle_hash, [(a, b) for a, b in conditions_dict.items()])
-            )
-        return NPCResult(None, npc_list, uint64(clvm_cost))
-    except Exception:
-        return NPCResult(uint16(Err.GENERATOR_RUNTIME_ERROR.value), [], uint64(0))
-
-
 def get_name_puzzle_conditions(
     generator: BlockGenerator, max_cost: int, *, cost_per_byte: int, safe_mode: bool
 ) -> NPCResult:
