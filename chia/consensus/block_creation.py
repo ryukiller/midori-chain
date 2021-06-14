@@ -13,7 +13,7 @@ from chia.consensus.blockchain_interface import BlockchainInterface
 from chia.consensus.coinbase import create_farmer_coin, create_pool_coin
 from chia.consensus.constants import ConsensusConstants
 from chia.consensus.cost_calculator import NPCResult, calculate_cost_of_program
-from chia.full_node.mempool_check_conditions import get_name_puzzle_conditions
+from chia.full_node.mempool_check_conditions import get_name_puzzle_conditions_no_validation
 from chia.full_node.signage_point import SignagePoint
 from chia.types.blockchain_format.coin import Coin, hash_coin_list
 from chia.types.blockchain_format.foliage import Foliage, FoliageBlockData, FoliageTransactionBlock, TransactionsInfo
@@ -126,8 +126,8 @@ def create_foliage(
         # Calculate the cost of transactions
         if block_generator is not None:
             generator_block_heights_list = block_generator.block_height_list()
-            result: NPCResult = get_name_puzzle_conditions(
-                block_generator, constants.MAX_BLOCK_COST_CLVM, cost_per_byte=constants.COST_PER_BYTE, safe_mode=True
+            result: NPCResult = get_name_puzzle_conditions_no_validation(
+                block_generator, constants.MAX_BLOCK_COST_CLVM
             )
             cost = calculate_cost_of_program(block_generator.program, result, constants.COST_PER_BYTE)
 
